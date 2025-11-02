@@ -1,0 +1,14 @@
+<div id="cart-button">
+{% if not product.in_cart %}
+    <a class="cursor-pointer button !block !rounded-full !bg-black hover:!bg-neutral-500 text-center" 
+        hx-get="{% url 'add_to_cart' product.id %}" 
+        hx-target="#cart-button"
+        hx-swap="outerHTML">
+        Add to Cart
+    </a>
+    {% else %}
+    <a href="{% url 'cart' %}" class="button !block !rounded-full !bg-green-600 hover:!bg-green-700 text-center ">
+        Added to Cart
+    </a>
+{% endif %}
+</div>

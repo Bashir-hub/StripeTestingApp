@@ -99,6 +99,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'a_home.cprocs.project_title',
+                'a_stripe.context_processors.cart',
             ],
         },
     },
@@ -168,3 +169,5 @@ ACCOUNT_SIGNUP_FIELDS = ['email*', 'username*', 'password1*', 'password2*']
 
 STRIPE_SECRET_KEY = env('STRIPE_SECRET_KEY_TEST', default="secret")
 STRIPE_WEBHOOK_SECRET = env('STRIPE_WEBHOOK_SECRET', default="webhook")
+CART_SESSION_ID = 'cart'
+SESSION_COOKIE_AGE = 86400 #24 hours

@@ -27,7 +27,7 @@ urlpatterns = [
     path('', include('a_home.urls')),
     path('profile/', include('a_users.urls')),
     path('@<username>/', profile_view, name="profile"),
-    path('payment/', include('a_stripe.urls')),
+    path('shop/', include('a_stripe.urls')),
 ]
 
 # Only used when DEBUG=True, whitenoise can serve files when DEBUG=False

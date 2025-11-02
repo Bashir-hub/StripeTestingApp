@@ -5,18 +5,19 @@
 <div class="max-w-4xl mx-auto px-8 py-24">
     <div class="grid grid-cols-3 gap-6">
         <div class="col-span-2 rounded-xl">
-            <img class="rounded-xl w-full h-auto" src="https://res.cloudinary.com/dpuzdancn/image/upload/f_auto,q_auto/v1/static/uekrd91rurs6jogdn5bu">
+            <img class="rounded-xl w-full h-auto" src="{{ product.image }}">
         </div>
         <div class="pt-32">
            <h2>{{product.name}}<h2>
-           <p class="text-lg">{{product_price}}</p>
-
-           <form enctype="multipart/form-data" method="post" role="product_page">
-            {% csrf_token %}
-            <input type="hidden" name="price_id" value="price_1SM0BL0g6a1TpRgvuYLnFNjR"> 
-            <input type="hidden" name="quantity" value="1"> 
-            <button type="submit" class="!block !rounded-full !bg-black hover:!bg-neutral-500 active:scale-95 transition text-center !px-24" data-bind-href="pricing">Buy</button>
-           </form>
+           <p class="text-lg">{{product.price}}</p>
+           
+           {% if user.is_authenticated %}
+               {% include 'a_stripe/partials/cart-button.html' %}
+               {% else %}
+               <a href="{% url 'account_login' %}?next={{ request.path }}" class="button !block !rounded-full !bg-black hover:!bg-neutral-500 text-center ">
+                Add to Cart
+               </a>
+           {% endif %}
            
            <p class="pt-8 text-sm">{{product.description}}</p>
            <p class="text-sm hover:underline"><a href="https://andreas-juds-store.creator-spring.com/" target="_blank">Merch Store</a></p>

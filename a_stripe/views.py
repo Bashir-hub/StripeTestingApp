@@ -7,6 +7,8 @@ from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse,  HttpResponseBadRequest, HttpResponseServerError
 from django.contrib.auth import get_user_model
+from .utility import *
+from .cart import Cart 
 
 
 
@@ -15,53 +17,65 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 
 # Create your views here.
 
-def product_view(request):
-    product_id = 'prod_TIbOu1aETpRbrn'
+def shop_view(request):
+    products_list = stripe.Product.list()
+    print("STRIPE PRODUCTS COUNT:", len(products_list.get('data', [])))
+    products = []
+
+    for product in products_list['data']:
+        if product.get('metadata',{}).get('category')=="shop":
+           products.append(get_product_details(product))     
+    return render(request,'a_stripe/shop.html', {'products' : products})
+
+def product_view(request, product_id):
     product = stripe.Product.retrieve(product_id)
-    prices = stripe.Price.list(product = product_id) # getting all the prices of the product in the stripe 
-    price = prices.data[0] # because the product has only one price in the list in stripe
-    product_price = price.unit_amount/100.0 # to get it in dollar
+    product_details = get_product_details(product)
+    
+    cart = Cart(request)
+    product_details['in_cart'] = product_id in cart.cart_session
+    return render(request, 'a_stripe/product.html',{'product' : product_details})
 
-    if request.method == 'POST':
-        if not request.user.is_authenticated:
-            return redirect(f'{settings.BASE_URL}{reverse("account_login")}?next={request.get_full_path()}')
-        
-        user = request.user
-        price_id = request.POST.get('price_id')
-        quantity = int(request.POST.get('quantity'))
+def add_to_cart(request,  product_id):
+    cart = Cart(request)
+    cart.add(product_id)
+    print(cart.cart_session)
 
-        checkout_session = stripe.checkout.Session.create(
-            line_items = [
-                {
-                    'price': price_id,
-                    'quantity': quantity,
-                },
-            ],
-             payment_method_types=['card'],
-             mode= 'payment',
+    product = stripe.Product.retrieve(product_id)
+    product_details = get_product_details(product)
+    product_details['in_cart']= product_id in cart.cart_session
 
-             customer_creation= 'always',
-             success_url= f'{settings.BASE_URL}{reverse("payment_successful")}?session_id={{CHECKOUT_SESSION_ID}}',
-             cancel_url= f'{settings.BASE_URL}{reverse("payment_cancelled")}',
-        )
-        # Save a UserPayment record immediately so webhook can find it
-        UserPayment.objects.create(
-            user=user,
-            stripe_customer_id=checkout_session.get('customer') or '',
-            stripe_checkout_id=checkout_session.id,
-            stripe_product_id='unknown',  # will update later from line items or webhook
-            product_name='unknown',       # will update later
-            quantity=1,
-            price=45.00,                  # match your product price
-            currency='usd',
-            has_paid=False
-        )
+    response =  render(request, 'a_stripe/partials/cart-button.html',{'product': product_details})
+    response['HX-Trigger'] = 'hx_menu_cart'
+    return response
 
-        return redirect(checkout_session.url, code=303)
-    return render(request, 'a_stripe/product.html',{'product' :  product, 'product_price' : product_price})
+
+def hx_menu_cart(request):
+    return render(request,'a_stripe/partials/menu-cart.html')
+
+def cart_view(request):
+    quantity_range=list(range(1, 11))
+    return render(request, 'a_stripe/cart.html', {'quantity_range' : quantity_range})
+
+def update_checkout(request,product_id):
+    quantity = int(request.POST.get('quantity', 1))
+    cart = Cart(request)
+    cart.add(product_id, quantity)
+
+    product= stripe.Product.retrieve(product_id)
+    product_details = get_product_details(product)
+    product_details['total_price']= product_details['price'] * quantity 
+
+    response = render(request, 'a_stripe/partials/checkout-total.html', {'product_details' : product_details })
+    response['HX-Trigger'] = 'hx_menu_cart'
+    return response
+
+def remove_from_cart_view(request, product_id):
+    cart = Cart(request)
+    cart.remove(product_id)
+    return redirect('cart')
+
 
 User = get_user_model()
-
 def payment_successful(request):
     customer = None
     checkout_session_id = request.GET.get('session_id', None)
