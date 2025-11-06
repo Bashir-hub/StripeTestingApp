@@ -1,12 +1,21 @@
 
-        <div id="checkout_total" class="p-6">
-            <h2>Sub total</h2>
-            <p>Total: ${{ cart.get_total_cost|floatformat:2 }}</p>
-            <a href="" class="button">Proceed to Checkout</a>
+        <div id="checkout_total" class="border rounded-lg shadow-md p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="text-2xl">Sub total</div>
+                <div>${{ cart.get_total_cost|floatformat:2 }}</div>
+            </div>
+            <div class="flex items-center justify-between mb-4">
+                <span>Items:</span>
+                <span>{{ cart|length}}</span>
+            </div>
+            <a href="{% url 'checkout' %}" class="button w-full !text-center">Proceed to Checkout</a>
         </div>
 
+
+
          <div class="hidden">
-         <div hx-swap-oob="true" id="product-total-{{ product_id }}">
-            ${{ product.total_price|floatformat:2 }}
+            <div hx-swap-oob="true" id="product-total-{{ product_id }}" class="text-right whitespace-nowrap">
+                ${{ product.total_price|floatformat:2 }}
+            </div>
         </div>
-        </div>
+       

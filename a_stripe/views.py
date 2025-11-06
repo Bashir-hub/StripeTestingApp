@@ -5,10 +5,12 @@ from django.conf import settings
 from .models import *
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse,  HttpResponseBadRequest, HttpResponseServerError
 from django.contrib.auth import get_user_model
 from .utility import *
 from .cart import Cart 
+from .form import *
 
 
 
@@ -54,7 +56,9 @@ def hx_menu_cart(request):
 
 def cart_view(request):
     quantity_range=list(range(1, 11))
-    return render(request, 'a_stripe/cart.html', {'quantity_range' : quantity_range})
+   # return render(request, 'a_stripe/cart.html', {'quantity_range' : quantity_range})
+    return render(request, 'a_stripe/cart.html', {'quantity_range': quantity_range, 'cart': Cart(request)})
+
 
 def update_checkout(request,product_id):
     quantity = int(request.POST.get('quantity', 1))
@@ -64,8 +68,16 @@ def update_checkout(request,product_id):
     product= stripe.Product.retrieve(product_id)
     product_details = get_product_details(product)
     product_details['total_price']= product_details['price'] * quantity 
-
+    """
     response = render(request, 'a_stripe/partials/checkout-total.html', {'product_details' : product_details })
+    response['HX-Trigger'] = 'hx_menu_cart'
+    return response
+    """
+    response = render(
+        request,
+        'a_stripe/partials/checkout-total.html',
+        {'product': product_details, 'product_id': product_id, 'cart': cart}
+    )
     response['HX-Trigger'] = 'hx_menu_cart'
     return response
 
@@ -74,7 +86,41 @@ def remove_from_cart_view(request, product_id):
     cart.remove(product_id)
     return redirect('cart')
 
+@login_required
+def checkout_view(request):
+    shipping_info = ShippingInfo.objects.filter(user=request.user).first() # this is to automatic fill up the shipping form if the user already sign 
 
+    if shipping_info:
+        form = ShippingForm(instance=shipping_info)
+    else:
+        form = ShippingForm(instance={'email': request.user.email})
+
+    #form = ShippingForm(initial={'email' : request.user.email})
+
+
+    if request.method == 'POST':
+        form = ShippingForm(request.POST, instance=shipping_info)
+        if form.is_valid():
+            shipping_info = form.save(commit=False)
+            shipping_info.user = request.user
+            shipping_info.email = form.cleaned_data['email'].lower()
+            shipping_info.save()
+
+            cart = Cart(request)
+          
+            checkout_session = create_checkout_session(cart, shipping_info.email)
+
+            CheckoutSession.objects.create(
+                checkout_id = checkout_session.id,
+                shipping_info = shipping_info,
+                total_cost = cart.get_total_cost()
+
+            )
+            return redirect(checkout_session.url, code=303)
+
+    return render(request, 'a_stripe/checkout.html', {'form' : form})
+
+"""
 User = get_user_model()
 def payment_successful(request):
     customer = None
@@ -178,8 +224,19 @@ def payment_successful(request):
         session = stripe.checkout.Session.retrieve(checkout_session_id)
         customer_id = session.customer
         customer = stripe.Customer.retrieve(customer_id)
+
+        if settings.CART_SESSION_ID in request.session :
+            del request.session[settings.CART_SESSION_ID]
+
+        if settings.DEBUG:
+            checkout = CheckoutSession.objects.get(checkout_id=checkout_session_id)
+            checkout.has_paid = True
+            checkout.save()
+
+
         # inject this customer in to the success template and
         #  keep this record in the database
+        """"
         line_item = stripe.checkout.Session.list_line_items(checkout_session_id).data[0]
         UserPayment.objects.get_or_create(
             user = request.user,
@@ -192,11 +249,12 @@ def payment_successful(request):
             currency = line_item.price.currency,
             has_paid = True
         )
+        """
     return render(request, 'a_stripe/payment_successful.html', {'customer':customer})
-"""
-def payment_cancelled(request):
-    return render(request, 'a_stripe/payment_successful.html')
 
+def payment_cancelled(request):
+    return render(request, 'a_stripe/payment_cancelled.html')
+"""
 @require_POST
 @csrf_exempt
 def stripe_webhook(request):
@@ -273,8 +331,12 @@ def stripe_webhook(request):
     if event['type'] == 'checkout.session.completed':
        session = event['data']['object']
        checkout_session_id = session.get('id')
-       user_payment = UserPayment.objects.get(stripe_checkout_id=checkout_session_id)
-       user_payment.has_paid = True
-       user_payment.save()
+       checkout = CheckoutSession.objects.get(checkout_id=checkout_session_id)
+       checkout.has_paid = True
+       checkout.save()
+
+       
+       #user_payment = UserPayment.objects.get(stripe_checkout_id=checkout_session_id)
+       #user_payment.has_paid = True
+       #user_payment.save()
     return HttpResponse(status = 200) # means it is ok he has paid 
-"""

@@ -1,4 +1,6 @@
 import stripe
+from django.conf import settings
+from django.urls import reverse
 
 def get_product_details(product):
     prices = stripe.Price.list(product = product['id'])
@@ -12,41 +14,57 @@ def get_product_details(product):
     }
     return product_details
 """
-from decimal import Decimal
-
-DEFAULT_IMAGE = "/static/no-image.png"
-
-def get_product_details(product):
-    product_id = product.get('id')
-    name = product.get('name', 'Untitled')
-    images = product.get('images') or []
-    image = images[0] if images else DEFAULT_IMAGE
-
-    # Try to fetch prices and handle empty list
-    try:
-        prices = stripe.Price.list(product=product_id)
-    except Exception as e:
-        print(f"Error fetching prices for product {product_id}: {e}")
-        prices = {}
-
-    price_obj = None
-    if prices and prices.get('data'):
-        price_obj = prices['data'][0]
-        print(f"  Price found for {product_id}: {price_obj.get('id')} unit_amount={price_obj.get('unit_amount')} currency={price_obj.get('currency')}")
-    else:
-        print(f"  No prices for product {product_id}")
-
-    unit_amount = price_obj.get('unit_amount') if price_obj else None
-    price_display = (Decimal(unit_amount) / Decimal(100)) if unit_amount is not None else None
-
-    product_details = {
-        'id': product_id,
-        'name': name,
-        'image': image,
-        'description': product.get('description', ''),
-        'price': price_display,
-        'currency': price_obj.get('currency') if price_obj else None,
-        'raw_price_obj': price_obj,
-    }
-    return product_details
+def create_checkout_session(cart, customer_email):
+    line_items = []
+    for item in cart: 
+        prices = stripe.Price.list(product=item['id'])
+        price = prices.data[0]
+        line_items.append({
+            'price' : price.id,
+            'quantity' : item['quantity'],
+        })
+    
+    checkout_session = stripe.checkout.Session.create(
+        line_items=line_items,
+        payment_method_types=['card'],
+        mode='payment',
+        customer_creation = 'always',
+        success_url = f'{settings.BASE_URL}{reverse("payment_successful")}?session_id={{ CHECKOUT_SESSION_ID }}',
+        cancel_url = f'{settings.BASE_URL}{reverse("payment_cancelled")}',
+        customer_email = customer_email,
+    )
+    return checkout_session
 """
+def create_checkout_session(cart, customer_email):
+    line_items = []
+    for item in cart:
+        prices = stripe.Price.list(product=item['id'])
+        price = prices.data[0]
+        line_items.append({
+            'price': price.id,
+            'quantity': item['quantity'],
+        })
+
+    success_url = f'{settings.BASE_URL}{reverse("payment_successful")}?session_id={{CHECKOUT_SESSION_ID}}'
+    cancel_url = f'{settings.BASE_URL}{reverse("payment_cancelled")}'
+
+    # DEBUG print so we can confirm what goes to Stripe
+    print("DEBUG: success_url going to Stripe:", repr(success_url))
+
+    checkout_session = stripe.checkout.Session.create(
+        line_items=line_items,
+        payment_method_types=['card'],
+        mode='payment',
+        customer_creation='always',
+        success_url=success_url,
+        cancel_url=cancel_url,
+        customer_email=customer_email,
+    )
+
+    # DEBUG prints so we can confirm Stripe's response
+    print("DEBUG: Stripe created checkout session.id =", repr(checkout_session.id))
+    print("DEBUG: checkout_session.success_url =", repr(getattr(checkout_session, "success_url", None)))
+
+    return checkout_session
+
+

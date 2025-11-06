@@ -3,5 +3,5 @@ from .models import *
 
 # Register your models here.
 
-admin.site.register(UserPayment)
-
+admin.site.register(ShippingInfo)
+admin.site.register(CheckoutSession)

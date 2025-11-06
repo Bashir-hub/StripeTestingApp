@@ -8,10 +8,12 @@ class Cart:
     def __init__(self,request):
         self.session = request.session                             # assigning a session to the request of the user
         cart_session = self.session.get(settings.CART_SESSION_ID) # assigning the cart session 
-        if not cart_session:                                       # if the cart session is unavailable or not created
-            cart_session=self.session[settings.CART_SESSION_ID]={} # creating  cart session 
-        self.cart_session = cart_session                           # making the cart session available throughout 
-    
+       
+        if not cart_session:
+            self.session[settings.CART_SESSION_ID] = {}
+            cart_session = self.session[settings.CART_SESSION_ID]                        # making the cart session available throughout 
+        self.cart_session = cart_session
+
     def __iter__(self):     # use in python when you want loop and return a list of quantity 
         for product_id, item in self.cart_session.items():
             product = stripe.Product.retrieve(product_id)
@@ -26,7 +28,7 @@ class Cart:
                 'total_price' : product_details['price'] * item['quantity'],
             }
     def __len__(self):          # tell the number of items in the cart session 
-        return sum(item['quantity'] for item in self.cart_session.values()) # return the total no. item
+        return sum(item.get('quantity',0) for item in self.cart_session.values()) # return the total no. item
     
     def save(self): #which tells the gloval that something is modified so it has to be save 
         self.session.modified = True
@@ -37,6 +39,7 @@ class Cart:
         } 
         self.save()
     
+
     def remove(self, product_id):
         if product_id in self.cart_session:
             del self.cart_session[product_id]
